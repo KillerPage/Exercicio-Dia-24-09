@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>InovaWeb — Dashboard Administrativo (SPA)</title>
+  <meta name="description" content="Dashboard administrativo SPA responsivo para gerenciar produtos e vendas. Exemplo para exercício." />
+
+  <!-- Google Fonts (system-friendly fallback) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root{
+      --bg:#0f1724; /* deep slate */
+      --card:#0b1220;
+      --muted:#94a3b8;
+      --accent:#7c3aed; /* purple */
+      --accent-2:#06b6d4; /* teal */
+      --glass: rgba(255,255,255,0.03);
+      --success: #10b981;
+      --danger: #ef4444;
+      --radius: 12px;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#061021);color:#e6eef8}
+    a{color:inherit;text-decoration:none}
+
+    /* Layout */
+    .app{display:grid;grid-template-columns:260px 1fr;gap:20px;min-height:100vh;padding:20px}
+
+    /* Responsive: collapse sidebar */
+    @media (max-width:900px){
+      .app{grid-template-columns:1fr;}
+      .sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-110%);z-index:40;transition:transform .28s ease;}
+      .sidebar.open{transform:translateX(0%)}
+      .content-overlay{display:block}
+    }
+
+    .sidebar{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:18px;border-radius:var(--radius);box-shadow:0 6px 20px rgba(2,6,23,0.6);height:calc(100vh - 40px);position:sticky;top:20px}
+    .brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+    .brand .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-weight:700;color:white}
+    .brand h1{font-size:15px;margin:0}
+    .nav{margin-top:8px}
+    .nav a{display:flex;gap:10px;align-items:center;padding:10px;border-radius:10px;color:var(--muted);margin-bottom:6px;transition:all .18s}
+    .nav a.active, .nav a:hover{background:linear-gradient(90deg, rgba(124,58,237,0.12), rgba(6,182,212,0.06));color:#fff;transform:translateX(4px)}
+
+    .sidebar .version{margin-top:auto;font-size:12px;color:var(--muted);padding-top:12px}
+
+    /* Top bar + content */
+    .main{display:flex;flex-direction:column;gap:18px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;background:var(--glass);border-radius:12px}
+    .search{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.02);padding:8px;border-radius:10px;width:380px}
+    .search input{background:transparent;border:0;outline:none;color:inherit;width:100%}
+    .actions{display:flex;gap:8px;align-items:center}
+    .btn{background:linear-gradient(90deg,var(--accent),var(--accent-2));padding:8px 12px;border-radius:10px;color:white;font-weight:600;border:0;cursor:pointer;transition:transform .12s ease, box-shadow .12s}
+    .btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+    .btn:active{transform:scale(.98)}
+
+    /* cards grid */
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    @media (max-width:1100px){.grid{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:640px){.grid{grid-template-columns:1fr}}
+
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));padding:14px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.5)}
+    .kpi{display:flex;justify-content:space-between;align-items:center}
+    .kpi h3{margin:0;font-size:13px;color:var(--muted)}
+    .kpi .value{font-size:20px;font-weight:700}
+
+    /* products table */
+    .table-wrap{overflow:auto}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    thead th{font-size:12px;text-align:left;padding:10px;color:var(--muted);border-bottom:1px solid rgba(255,255,255,0.03)}
+    tbody td{padding:12px 10px;border-bottom:1px solid rgba(255,255,255,0.02)}
+    .pill{display:inline-block;padding:6px 8px;border-radius:999px;font-size:12px;background:rgba(255,255,255,0.03)}
+
+    .row-actions button{margin-left:6px}
+
+    /* modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.6);display:none;align-items:center;justify-content:center;z-index:60}
+    .modal{background:linear-gradient(180deg,#071125, #081325);padding:18px;border-radius:12px;width:100%;max-width:680px}
+    .modal.show{display:block}
+
+    /* small UI */
+    .chip{background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:8px;font-size:12px}
+
+    /* subtle animations */
+    .fade-in{animation:fadeIn .45s ease both}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+    /* overlay shown when mobile sidebar opened */
+    .content-overlay{display:none;position:fixed;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.15),transparent);z-index:30}
+
+    footer{font-size:12px;color:var(--muted);text-align:center;padding:12px}
+
+    /* forms */
+    .form-row{display:flex;gap:10px}
+    .form-row .field{flex:1}
+    input[type=text], input[type=number], select, textarea{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:10px;border-radius:8px;color:inherit;outline:none}
+
+    /* small screens adjustments */
+    @media (max-width:540px){
+      .search{width:100%}
+      .brand h1{font-size:14px}
+      .btn{padding:8px 10px}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar fade-in" id="sidebar">
+      <div class="brand">
+        <div class="logo">IW</div>
+        <div>
+          <h1>InovaWeb</h1>
+          <div class="chip">Admin Dashboard</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a href="#/dashboard" class="nav-link active" data-route="dashboard">📊 Dashboard</a>
+        <a href="#/produtos" class="nav-link" data-route="produtos">🧾 Produtos</a>
+        <a href="#/vendas" class="nav-link" data-route="vendas">💸 Vendas</a>
+        <a href="#/config" class="nav-link" data-route="config">⚙️ Configurações</a>
+      </nav>
+
+      <div class="version">Versão 1.0 • SPA • Offline-first demo</div>
+    </aside>
+
+    <div class="content-overlay" id="overlay" onclick="toggleSidebar(false)"></div>
+
+    <main class="main">
+      <div class="topbar">
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn secondary" id="menuBtn" aria-label="Abrir menu">☰</button>
+          <div class="search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="opacity:.7"><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></circle></svg>
+            <input id="globalSearch" placeholder="Pesquisar produtos, pedidos ou clientes..." />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="newProductBtn">+ Novo produto</button>
+          <button class="btn secondary" id="exportBtn">Exportar CSV</button>
+          <div class="chip" id="userChip">Olá, Admin</div>
+        </div>
+      </div>
+
+      <!-- Router outlet -->
+      <section id="view" class="fade-in">
+        <!-- default content: dashboard -->
+        <div id="route-dashboard">
+          <div class="grid">
+            <div class="card">
+              <div class="kpi"><h3>Total de Vendas (30d)</h3><div class="value" id="kpi-sales">R$ 0</div></div>
+              <canvas id="salesChart" height="120"></canvas>
+            </div>
+
+            <div class="card">
+              <div class="kpi"><h3>Produtos</h3><div class="value" id="kpi-products">0</div></div>
+              <div style="margin-top:12px;color:var(--muted)" id="topProducts">—</div>
+            </div>
+
+            <div class="card">
+              <div class="kpi"><h3>Pedidos Pendentes</h3><div class="value" id="kpi-pending">0</div></div>
+              <div style="margin-top:12px;color:var(--muted)" id="recentOrders">—</div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px" class="card">
+            <h3 style="margin:0">Visão rápida de produtos</h3>
+            <div class="table-wrap">
+              <table id="quickProducts">
+                <thead><tr><th>Produto</th><th>Preço</th><th>Estoque</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- produtos route -->
+        <div id="route-produtos" style="display:none">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+            <h2>Gerenciar Produtos</h2>
+            <div style="display:flex;gap:8px">
+              <select id="filterCategory"><option value="all">Todas categorias</option></select>
+              <select id="sortProducts"><option value="newest">Mais recentes</option><option value="priceAsc">Preço ↑</option><option value="priceDesc">Preço ↓</option></select>
+            </div>
+          </div>
+
+          <div style="margin-top:12px" class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <strong>Produtos</strong>
+                <div style="color:var(--muted);font-size:13px" id="productsCount">0 produtos</div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <input id="prodSearch" placeholder="Pesquisar produto..." />
+                <button class="btn" id="bulkDelete">Apagar selecionados</button>
+              </div>
+            </div>
+
+            <div class="table-wrap" style="margin-top:12px">
+              <table id="productsTable">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="selectAll" /></th>
+                    <th>Nome</th>
+                    <th>Categoria</th>
+                    <th>Preço</th>
+                    <th>Estoque</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- vendas route -->
+        <div id="route-vendas" style="display:none">
+          <h2>Vendas</h2>
+          <div class="card" style="margin-top:12px">
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+              <div><strong>Totais:</strong> <span id="salesTotal">R$ 0</span></div>
+              <div><strong>Pedidos:</strong> <span id="ordersCount">0</span></div>
+              <div><strong>Média por pedido:</strong> <span id="avgOrder">R$ 0</span></div>
+            </div>
+
+            <div style="margin-top:16px">
+              <canvas id="ordersChart" height="120"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- config route -->
+        <div id="route-config" style="display:none">
+          <h2>Configurações</h2>
+          <div class="card" style="margin-top:12px">
+            <h3>Preferências</h3>
+            <div style="margin-top:10px">
+              <label><input type="checkbox" id="prefOffline"/> Ativar modo offline (usa localStorage)</label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer> © InovaWeb • Dashboard de demonstração — Feito por Breno </footer>
+    </main>
+  </div>
+
+  <!-- Modal (create/edit product) -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="modalTitle">Novo produto</h3>
+      <div style="margin-top:12px">
+        <div class="form-row">
+          <div class="field">
+            <label>Nome</label>
+            <input id="p_name" type="text" placeholder="Nome do produto" />
+          </div>
+          <div class="field">
+            <label>Categoria</label>
+            <input id="p_category" type="text" placeholder="Ex: Eletrônicos" />
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:8px">
+          <div class="field">
+            <label>Preço (R$)</label>
+            <input id="p_price" type="number" step="0.01" />
+          </div>
+          <div class="field">
+            <label>Estoque</label>
+            <input id="p_stock" type="number" />
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <label>Descrição</label>
+          <textarea id="p_desc" rows="3" placeholder="Descrição curta"></textarea>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+          <button class="btn secondary" id="cancelModal">Cancelar</button>
+          <button class="btn" id="saveProduct">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /***********************
+     * Simple SPA + offline
+     ***********************/
+    const routes = ['dashboard','produtos','vendas','config'];
+    const state = {
+      products: [],
+      orders: [],
+      offline: true
+    };
+
+    // Utilities
+    const $ = (sel,root=document)=>root.querySelector(sel);
+    const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
+
+    // Sidebar toggle for mobile
+    const sidebar = $('#sidebar');
+    const overlay = $('#overlay');
+    function toggleSidebar(open){
+      if(window.innerWidth<=900){
+        sidebar.classList.toggle('open', open===undefined? !sidebar.classList.contains('open') : open);
+        overlay.style.display = sidebar.classList.contains('open')? 'block' : 'none';
+      }
+    }
+    $('#menuBtn').addEventListener('click', ()=>toggleSidebar());
+
+    // Modal
+    const modalBackdrop = $('#modalBackdrop');
+    function openModal(product){
+      modalBackdrop.style.display = 'flex';
+      $('#modalTitle').textContent = product? 'Editar produto' : 'Novo produto';
+      $('#p_name').value = product?.name||'';
+      $('#p_category').value = product?.category||'';
+      $('#p_price').value = product?.price||'';
+      $('#p_stock').value = product?.stock||'';
+      $('#p_desc').value = product?.description||'';
+      modalBackdrop.dataset.editId = product?.id||'';
+    }
+    function closeModal(){ modalBackdrop.style.display='none'; modalBackdrop.dataset.editId=''; }
+    $('#cancelModal').addEventListener('click', closeModal);
+
+    // Mock API with localStorage fallback (simulates network)
+    function seedIfEmpty(){
+      const existing = JSON.parse(localStorage.getItem('iw_products')||'[]');
+      if(existing.length>0) return;
+      const seed = [
+        {id: id(), name:'Fone Gamer HyperX', category:'Eletrônicos', price:299.90, stock:24, description:'Fone com microfone e RGB.'},
+        {id: id(), name:'Teclado Mecânico', category:'Eletrônicos', price:459.00, stock:8, description:'Switches azuis, retroiluminação.'},
+        {id: id(), name:'Camiseta Tech', category:'Vestuário', price:79.9, stock:60, description:'Algodão premium 100%.'},
+        {id: id(), name:'Mouse Óptico Pro', category:'Eletrônicos', price:149.5, stock:32, description:'Sensor 16000 DPI.'}
+      ];
+      localStorage.setItem('iw_products', JSON.stringify(seed));
+      const orders = [
+        {id:id(), total:399.9, items:2, status:'completed', date: daysAgo(2)},
+        {id:id(), total:129.9, items:1, status:'pending', date: daysAgo(1)},
+        {id:id(), total:229.5, items:3, status:'completed', date: daysAgo(6)},
+      ];
+      localStorage.setItem('iw_orders', JSON.stringify(orders));
+    }
+
+    function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString(); }
+    function id(){ return 'p_'+Math.random().toString(36).slice(2,9); }
+
+    // simulate fetch with small delay
+    function fetchProducts(){
+      return new Promise(resolve=>{
+        setTimeout(()=>{
+          const data = JSON.parse(localStorage.getItem('iw_products')||'[]');
+          resolve(data);
+        }, 260);
+      });
+    }
+    function fetchOrders(){
+      return new Promise(resolve=>{
+        setTimeout(()=>{
+          const data = JSON.parse(localStorage.getItem('iw_orders')||'[]');
+          resolve(data);
+        }, 260);
+      });
+    }
+
+    function saveProducts(products){ localStorage.setItem('iw_products', JSON.stringify(products)); }
+    function saveOrders(orders){ localStorage.setItem('iw_orders', JSON.stringify(orders)); }
+
+    // Rendering
+    async function refreshData(){
+      state.products = await fetchProducts();
+      state.orders = await fetchOrders();
+      renderDashboard();
+      renderProductsTable();
+      renderProductsQuick();
+      renderSales();
+      fillCategoryFilter();
+    }
+
+    // Dashboard rendering
+    function renderDashboard(){
+      const sales30 = state.orders.reduce((s,o)=>s+o.total,0);
+      $('#kpi-sales').textContent = 'R$ '+num(sales30);
+      $('#kpi-products').textContent = state.products.length;
+      const pending = state.orders.filter(o=>o.status==='pending').length;
+      $('#kpi-pending').textContent = pending;
+
+      // top products (by stock low/high) simple example
+      const top = state.products.slice(0,3).map(p=>p.name+' ('+p.stock+')').join(', ');
+      $('#topProducts').textContent = top||'—';
+
+      // recent orders
+      const rec = state.orders.slice(0,3)
+      .map(o => `Pedido (${o.status}) — R$ ${num(o.total)}`)
+      .join(' • ');
+      $('#recentOrders').textContent = rec || '—';
+
+
+      // chart
+      drawSalesChart();
+      
+    }
+
+    function num(v){ return Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+    // Quick products table
+    function renderProductsQuick(){
+      const tbody = $('#quickProducts tbody'); tbody.innerHTML='';
+      state.products.slice(0,6).forEach(p=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.name}</td><td>R$ ${num(p.price)}</td><td>${p.stock}</td><td><span class="pill">${p.stock>0? 'Ativo':'Esgotado'}</span></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Products management
+    function renderProductsTable(){
+      const tbody = $('#productsTable tbody'); tbody.innerHTML='';
+      const q = $('#prodSearch').value.trim().toLowerCase();
+      const filter = $('#filterCategory').value;
+      let list = state.products.slice();
+      if(filter && filter!=='all') list = list.filter(p=>p.category===filter);
+      if(q) list = list.filter(p=>p.name.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q));
+
+      $('#productsCount').textContent = list.length+' produtos';
+
+      list.forEach(p=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="checkbox" class="sel" data-id="${p.id}" /></td>
+          <td><strong>${p.name}</strong><div style="color:var(--muted);font-size:12px">${p.description||''}</div></td>
+          <td>${p.category}</td>
+          <td>R$ ${num(p.price)}</td>
+          <td>${p.stock}</td>
+          <td class="row-actions">
+            <button class="btn secondary" onclick="editProduct('${p.id}')">Editar</button>
+            <button class="btn" onclick="deleteProduct('${p.id}')">Apagar</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      $('#productsCount').textContent = state.products.length+ ' produtos (total)';
+    }
+
+    // fill category select
+    function fillCategoryFilter(){
+      const sel = $('#filterCategory');
+      const cats = Array.from(new Set(state.products.map(p=>p.category))).filter(Boolean);
+      sel.innerHTML = '<option value="all">Todas categorias</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+    }
+
+    // create product
+    document.getElementById('newProductBtn').addEventListener('click', ()=>openModal());
+    document.getElementById('saveProduct').addEventListener('click', ()=>{
+      const idEdit = modalBackdrop.dataset.editId;
+      const product = {
+        id: idEdit||id(),
+        name: $('#p_name').value.trim()||'Produto sem nome',
+        category: $('#p_category').value.trim()||'Geral',
+        price: parseFloat($('#p_price').value)||0,
+        stock: parseInt($('#p_stock').value)||0,
+        description: $('#p_desc').value.trim()||''
+      };
+      if(idEdit){
+        const idx = state.products.findIndex(p=>p.id===idEdit);
+        if(idx>-1) state.products[idx]=product;
+      } else {
+        state.products.unshift(product);
+      }
+      saveProducts(state.products);
+      closeModal();
+      refreshData();
+    });
+
+    window.editProduct = function(id){
+      const p = state.products.find(x=>x.id===id);
+      openModal(p);
+    }
+
+    window.deleteProduct = function(id){
+      if(!confirm('Deseja realmente apagar este produto?')) return;
+      state.products = state.products.filter(p=>p.id!==id);
+      saveProducts(state.products);
+      refreshData();
+    }
+
+    // bulk delete
+    $('#bulkDelete').addEventListener('click', ()=>{
+      const checked = $$('.sel').filter(cb=>cb.checked).map(cb=>cb.dataset.id);
+      if(checked.length===0){ alert('Nenhum selecionado'); return; }
+      if(!confirm(`Apagar ${checked.length} produtos?`)) return;
+      state.products = state.products.filter(p=>!checked.includes(p.id));
+      saveProducts(state.products);
+      refreshData();
+    });
+
+    // select all
+    $('#selectAll').addEventListener('change', (e)=>{
+      $$('.sel').forEach(cb=>cb.checked=e.target.checked);
+    });
+
+    // search inputs
+    $('#prodSearch').addEventListener('input', ()=>renderProductsTable());
+    $('#globalSearch').addEventListener('input', (e)=>{
+      const q = e.target.value.trim().toLowerCase();
+      // quick search behavior: if user types 'prod:' prefix open produtos
+      if(q.startsWith('prod:')){ location.hash = '#/produtos'; $('#prodSearch').value = q.replace('prod:',''); renderProductsTable(); }
+      else if(q.startsWith('venda:')){ location.hash = '#/vendas'; }
+    });
+
+    // export CSV
+    $('#exportBtn').addEventListener('click', ()=>{
+      const rows = [ ['id','nome','categoria','preco','estoque','descricao'], ...state.products.map(p=>[p.id,p.name,p.category,p.price,p.stock,p.description]) ];
+      const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='produtos_inovaweb.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // simple sales/chart rendering
+    let salesChart=null, ordersChart=null;
+    function drawSalesChart(){
+      const ctx = $('#salesChart').getContext('2d');
+      const labels = state.orders.slice().reverse().map(o=>new Date(o.date).toLocaleDateString());
+      const data = state.orders.slice().reverse().map(o=>o.total);
+      if(salesChart) salesChart.destroy();
+      salesChart = new Chart(ctx, {
+        type:'line', data:{labels, datasets:[{label:'Vendas (R$)', data, tension:0.35, fill:true, borderWidth:2}]},
+        options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}
+      });
+    }
+    function drawOrdersChart(){
+      const ctx = $('#ordersChart').getContext('2d');
+      const byDay = {};
+      state.orders.forEach(o=>{ const d = new Date(o.date).toLocaleDateString(); byDay[d] = (byDay[d]||0)+o.total; });
+      const labels = Object.keys(byDay);
+      const data = labels.map(l=>byDay[l]);
+      if(ordersChart) ordersChart.destroy();
+      ordersChart = new Chart(ctx, { type:'bar', data:{labels,datasets:[{label:'Total por dia', data, borderWidth:1}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}});
+    }
+
+    function renderSales(){
+      const total = state.orders.reduce((s,o)=>s+o.total,0);
+      $('#salesTotal').textContent = 'R$ '+num(total);
+      $('#ordersCount').textContent = state.orders.length;
+      $('#avgOrder').textContent = 'R$ '+num(state.orders.length? total/state.orders.length : 0);
+      drawOrdersChart();
+    }
+
+    // routing
+    function showRoute(route){
+      routes.forEach(r=>{ $('#route-'+r).style.display = (r===route)? 'block' : 'none';
+        document.querySelectorAll('.nav-link').forEach(a=>a.classList.toggle('active', a.dataset.route===route));
+      });
+    }
+    function applyHash(){
+      const h = location.hash.replace('#/','')||'dashboard';
+      const r = routes.includes(h)? h : 'dashboard';
+      showRoute(r);
+      toggleSidebar(false);
+    }
+    window.addEventListener('hashchange', applyHash);
+    applyHash();
+
+    // small helpers
+    function notify(msg){
+      // small ephemeral toast
+      const t = document.createElement('div'); t.textContent = msg; t.style.cssText = 'position:fixed;right:20px;bottom:20px;background:linear-gradient(90deg,var(--accent),var(--accent-2));padding:10px 14px;border-radius:10px;box-shadow:0 8px 30px rgba(2,6,23,0.6);z-index:90;font-weight:600';
+      document.body.appendChild(t); setTimeout(()=>{ t.style.transition='all .4s'; t.style.opacity='0'; t.style.transform='translateY(10px)'; setTimeout(()=>t.remove(),400); }, 2000);
+    }
+
+    // init
+    (function init(){
+      seedIfEmpty();
+      refreshData();
+
+      // demo: attach editing from other parts
+      $('#filterCategory').addEventListener('change', renderProductsTable);
+
+      // initial listeners
+      window.addEventListener('resize', ()=>{ if(window.innerWidth>900){ sidebar.classList.remove('open'); overlay.style.display='none' } });
+
+      // quick fake new order to show dynamic updates every 12s (demo)
+      setInterval(()=>{
+        // simulate an order occasionally
+        if(Math.random()<0.35){
+          const order = { id:id(), total: Number((Math.random()*800+30).toFixed(2)), items: Math.ceil(Math.random()*4), status: Math.random()<0.8? 'completed':'pending', date: new Date().toISOString() };
+          state.orders.unshift(order); saveOrders(state.orders); refreshData(); notify('Novo pedido recebido — R$ '+num(order.total));
+        }
+      }, 12000);
+
+    })();
+
+  </script>
+</body>
+</html>
